@@ -136,12 +136,12 @@ export default function Home() {
           <SectionTitle title="How it works" />
           <ol className="grid md:grid-cols-2 gap-6">
             {[
-              { step: '1', title: 'Foundation: secure web platform', text: 'Private network, sign-in, encryption, logging. A base for every tool that follows.' },
-              { step: '2', title: 'Automated trade booking (internal)', text: 'Validated post-trade tickets with audit trail to cut manual rework.' },
-              { step: '3', title: 'Broker RFQ console (internal)', text: 'Create RFQs, track quotes, expiry, and execution on one screen.' },
-              { step: '4', title: 'Client portal (read-only)', text: 'Clients view trades, RFQ outcomes, and daily snapshots — securely.' },
+              { step: '1', title: 'Foundation: Secure Web Platform', text: 'Private network, sign-in, encryption, logging. A base for every tool that follows.' },
+              { step: '2', title: 'Automated Trade Booking (internal)', text: 'Validated post-trade tickets with audit trail to cut manual rework.' },
+              { step: '3', title: 'Broker RFQ Console (internal)', text: 'Create RFQs, track quotes, expiry, and execution on one screen.' },
+              { step: '4', title: 'Client Portal (read-only)', text: 'Clients view trades, RFQ outcomes, and daily snapshots — securely.' },
               { step: '5', title: 'Client RFQ (pilot)', text: 'Selected clients request quotes with broker oversight before execution.' },
-              { step: '6', title: 'Analytics & reports', text: 'Spread analysis, hit-rates, timestamps, and exportable best-ex packs.' },
+              { step: '6', title: 'Analytics & Reports', text: 'Spread analysis, hit-rates, timestamps, and exportable best-ex packs.' },
             ].map((s, i) => (
               <li key={i} className="relative rounded-xl bg-white border border-neutral-200 p-6 shadow-sm hover:shadow-md transition">
                 <div className="absolute -top-3 -left-3 h-8 w-8 rounded-full bg-gradient-to-br from-emerald-500 to-sky-600 text-white grid place-items-center text-sm font-semibold shadow">{s.step}</div>
