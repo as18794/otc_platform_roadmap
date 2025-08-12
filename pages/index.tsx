@@ -224,28 +224,50 @@ export default function Home() {
           </div>
         </section>
 
-        {/* ---------- Timeline (colorful) ---------- */}
-        <section id="timeline" className="max-w-6xl mx-auto px-4 py-12">
-          <SectionTitle title="Timeline" subtitle="Paced to ship value early and build steadily" />
-          <div className="relative">
-            <div className="absolute left-4 sm:left-1/2 sm:-translate-x-px top-0 bottom-0 w-0.5 bg-gradient-to-b from-indigo-300 via-sky-300 to-emerald-300" />
-            <div className="space-y-8">
-              {timeline.map((t, idx) => (
-                <div key={idx} className="relative sm:grid sm:grid-cols-2 sm:items-center gap-8">
-                  <div className={`sm:text-right ${idx % 2 === 0 ? 'sm:order-1' : 'sm:order-2'}`}>
-                    <div className="text-sm font-semibold text-neutral-500">{t.when}</div>
-                    <div className="text-lg font-semibold mt-1">{t.title}</div>
-                    <p className="text-neutral-800 mt-1">{t.detail}</p>
-                  </div>
-                  <div className={`relative ${idx % 2 === 0 ? 'sm:order-2' : 'sm:order-1'}`}>
-                    <div className="ml-2 sm:ml-0 sm:mx-auto h-3 w-3 rounded-full bg-neutral-900 ring-4 ring-white shadow relative z-10" />
-                    <div className="absolute -inset-2 sm:left-1/2 sm:translate-x-[-6px] h-4 w-4 rounded-full bg-gradient-to-br from-emerald-400 to-sky-500 opacity-30 blur" />
-                  </div>
-                </div>
-              ))}
+	{/* ---------- Timeline (mobile-clean, desktop-fancy) ---------- */}
+<section id="timeline" className="max-w-6xl mx-auto px-4 py-12">
+  <div className="max-w-5xl mx-auto text-center mb-10">
+    <h2 className="text-3xl sm:text-4xl font-semibold">Timeline</h2>
+    <p className="mt-2 text-neutral-700">Paced to ship value early and build steadily</p>
+    <span className="mt-4 block h-1 w-20 mx-auto rounded-full bg-gradient-to-r from-emerald-400 via-sky-400 to-indigo-500" />
+  </div>
+
+  {/* Mobile: stacked cards (no center line) */}
+  <ul className="md:hidden space-y-4">
+    {timeline.map((t, i) => (
+      <li key={i} className="relative rounded-xl border border-neutral-200 bg-white p-4 shadow-sm">
+        <span className="absolute left-0 top-0 bottom-0 w-1 rounded-l-xl bg-gradient-to-b from-emerald-400 via-sky-400 to-indigo-500" />
+        <div className="text-sm font-semibold text-neutral-500">{t.when}</div>
+        <div className="mt-1 text-base font-semibold">{t.title}</div>
+        <p className="mt-1 text-neutral-800 leading-relaxed">{t.detail}</p>
+      </li>
+    ))}
+  </ul>
+
+  {/* Desktop: center line with alternating sides */}
+  <div className="relative hidden md:block">
+    <div className="absolute left-1/2 -translate-x-1/2 top-0 bottom-0 w-px bg-gradient-to-b from-indigo-300 via-sky-300 to-emerald-300" />
+    <div className="space-y-10">
+      {timeline.map((t, idx) => (
+        <div key={idx} className="relative grid grid-cols-2 items-center gap-10">
+          {/* Left / Right text blocks alternate */}
+          <div className={idx % 2 === 0 ? "text-right pr-10" : "col-start-2 pl-10"}>
+            <div className="inline-block rounded-full px-3 py-1 text-xs font-semibold bg-neutral-100 text-neutral-600">
+              {t.when}
             </div>
+            <div className="mt-2 text-lg font-semibold">{t.title}</div>
+            <p className="mt-1 text-neutral-800">{t.detail}</p>
           </div>
-        </section>
+
+          {/* Center dot */}
+          <div className={`absolute left-1/2 -translate-x-1/2 h-3 w-3 rounded-full bg-neutral-900 ring-4 ring-white shadow`} />
+
+        </div>
+      ))}
+    </div>
+  </div>
+</section>
+
 
         {/* ---------- CTA ---------- */}
         <section className="border-t bg-gradient-to-r from-emerald-500 via-sky-500 to-indigo-600">
