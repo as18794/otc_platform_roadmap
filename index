@@ -1,0 +1,344 @@
+import React, { useMemo, useState } from "react";
+
+// Magen OTC Platform — Roadmap Website (single-file React component)
+// Styling: Tailwind utility classes (no imports needed in this environment)
+// Default export: a React component ready to drop into Next.js `pages/index.tsx`
+
+// -----------------------
+// Data Model
+// -----------------------
+
+const PHASES = [
+  {
+    id: "p0",
+    title: "Phase 0 — Foundations & Guardrails",
+    window: "Weeks 0–4 (with 1-week buffer)",
+    goal: "Stand up secure AWS scaffolding, auth, and CI/CD so later features ship faster and safer.",
+    items: [
+      "AWS accounts & VPC baseline (private subnets, NAT only where needed)",
+      "Cognito user pools & groups (broker / ops / admin)",
+      "RDS Postgres (encrypted, backups, least-privilege IAM)",
+      "ECS Fargate cluster + ALB wired for FastAPI service",
+      "S3 + CloudFront for frontend, WAF basic managed rules",
+      "Secrets Manager + KMS rotation (DB, vendor keys)",
+      "CI/CD via GitHub Actions → ECR → ECS deploy",
+    ],
+    risk: [
+      "IAM least-privilege can slow onboarding — pre-create role templates",
+      "Network plumbing (VPC endpoints, security groups) — keep a tested Terraform module",
+    ],
+  },
+  {
+    id: "p1",
+    title: "Phase 1 — Internal RFQ Console (MVP)",
+    window: "Months 2–4 (20% buffer)",
+    goal: "Create/track RFQs, ingest dealer quotes, execute, and capture audit trail.",
+    items: [
+      "FastAPI endpoints: POST /rfqs, /rfqs/{id}/quotes, /rfqs/{id}/execute",
+      "DynamoDB for hot RFQ state (TTL 5–15 mins) + RDS for audit/trades",
+      "WebSocket updates via API Gateway → broker UI real-time feed",
+      "Minimal Next.js console: login, RFQ create, quotes table, execute button",
+      "Append-only RFQ state transitions for compliance",
+    ],
+    risk: [
+      "Data-model churn — keep versioned schemas; add migration notes",
+      "WebSocket scale — start with modest limits, move to MQ/MSK later",
+    ],
+  },
+  {
+    id: "p2",
+    title: "Phase 2 — Market Snapshot & Morning PDF",
+    window: "Months 4–6 (15% buffer)",
+    goal: "Daily data ingest + templated PDF to S3/SES; optional client-safe version.",
+    items: [
+      "EventBridge cron → Lambda to pull market data (vendor/Bloomberg/API)",
+      "Store snapshots in RDS; expose /market-snapshots endpoints",
+      "Lambda PDF render (ReportLab/WeasyPrint) → S3; email via SES",
+      "Portal download page with signed URLs and access control",
+    ],
+    risk: [
+      "Vendor rate limits — cache & backoff; keep fallback data paths",
+      "PDF templating iterations — start simple, improve visuals later",
+    ],
+  },
+  {
+    id: "p3",
+    title: "Phase 3 — Client Analytics Portal",
+    window: "Months 6–9 (20% buffer)",
+    goal: "Per-client dashboards: RFQ hit rates, best-ex timestamps, spreads by product/tenor.",
+    items: [
+      "Nightly ETL (Lambda) → materialized views in RDS",
+      "Dashboards with filters (client, product, tenor, time)",
+      "CSV/PDF exports to S3 with signed URLs",
+    ],
+    risk: [
+      "Data quality dependencies on back-office extracts",
+      "Entitlements complexity — test with real client sets early",
+    ],
+  },
+  {
+    id: "p4",
+    title: "Phase 4 — STP & FIX Enhancements",
+    window: "Months 9–12 (25% buffer)",
+    goal: "STP worker with QuickFIX, SQS queueing, ACK/NACK tracking, and basic replay.",
+    items: [
+      "ECS service for QuickFIX (NLB/TCP) in private subnets",
+      "SQS trade capture queue; retries & dead-letter queue",
+      "FIX logs to EFS/S3; replay tooling with audit trail linkage",
+    ],
+    risk: [
+      "Counterparty network changes — plan for VPN/peering timelines",
+      "FIX dialect differences — keep per-venue config profiles",
+    ],
+  },
+];
+
+const TECH = [
+  { k: "Frontend", v: "Next.js (React), Tailwind, CloudFront, Cognito Hosted UI" },
+  { k: "API", v: "FastAPI on ECS Fargate behind ALB (private subnets)" },
+  { k: "Data", v: "DynamoDB (RFQ hot state) + RDS Postgres (audit/trades)" },
+  { k: "Realtime", v: "API Gateway WebSocket → broker UI" },
+  { k: "Jobs", v: "EventBridge + Lambda; SQS for STP queue" },
+  { k: "Security", v: "KMS, Secrets Manager, WAF, Shield, CloudTrail, GuardDuty" },
+];
+
+const MILESTONES = [
+  { when: "Week 2", what: "Foundational AWS infra and CI/CD live" },
+  { when: "End Month 2", what: "RFQ create/list working (internal)" },
+  { when: "End Month 3", what: "Quotes feed + execute flow + audit" },
+  { when: "End Month 5", what: "Daily snapshot PDFs to S3/SES" },
+  { when: "End Month 7", what: "Client analytics MVP dashboards" },
+  { when: "End Month 10", what: "STP pipeline + FIX ACK/NACK tracking" },
+];
+
+// -----------------------
+// Helpers
+// -----------------------
+
+function classNames(...c: Array<string | false | null | undefined>) {
+  return c.filter(Boolean).join(" ");
+}
+
+// Simple “today” dot on the timeline using rough months relative to project start.
+const PROJECT_START = new Date("2025-09-01T00:00:00Z"); // Sep 1, 2025
+const PROJECT_END = new Date("2026-08-31T23:59:59Z"); // Aug 31, 2026
+
+function progressPct(now = new Date()) {
+  const total = PROJECT_END.getTime() - PROJECT_START.getTime();
+  const done = Math.min(Math.max(now.getTime() - PROJECT_START.getTime(), 0), total);
+  return Math.round((done / total) * 100);
+}
+
+// -----------------------
+// UI Sections
+// -----------------------
+
+function Header() {
+  return (
+    <header className="bg-gradient-to-b from-slate-900 to-slate-800 text-white">
+      <div className="max-w-6xl mx-auto px-4 py-10 md:py-14">
+        <h1 className="text-3xl md:text-5xl font-semibold tracking-tight">Magen OTC Platform Roadmap</h1>
+        <p className="mt-4 text-slate-300 max-w-2xl">
+          A pragmatic, single-operator plan to compete with Tradeweb on the core broker workflows — built on a secure, AWS-first stack with realistic buffers.
+        </p>
+        <div className="mt-6 flex flex-wrap items-center gap-3">
+          <span className="inline-flex items-center rounded-full bg-emerald-600/20 text-emerald-300 px-3 py-1 text-sm">
+            One-person build
+          </span>
+          <span className="inline-flex items-center rounded-full bg-indigo-600/20 text-indigo-300 px-3 py-1 text-sm">
+            Security-first
+          </span>
+          <span className="inline-flex items-center rounded-full bg-amber-600/20 text-amber-300 px-3 py-1 text-sm">
+            Buffers included
+          </span>
+        </div>
+      </div>
+    </header>
+  );
+}
+
+function Timeline() {
+  const pct = useMemo(() => progressPct(), []);
+  const months = [
+    "Sep 25","Oct 25","Nov 25","Dec 25","Jan 26","Feb 26","Mar 26","Apr 26","May 26","Jun 26","Jul 26","Aug 26",
+  ];
+  return (
+    <section className="bg-white dark:bg-slate-950">
+      <div className="max-w-6xl mx-auto px-4 py-10 md:py-14">
+        <h2 className="text-xl md:text-2xl font-semibold text-slate-900 dark:text-white">High-Level Timeline</h2>
+        <p className="mt-2 text-slate-600 dark:text-slate-300">Start: Sep 1, 2025 · End: Aug 31, 2026 · Current progress marker for reference.</p>
+
+        <div className="mt-6 bg-slate-100 dark:bg-slate-900 rounded-2xl p-4">
+          <div className="grid grid-cols-12 gap-2 text-xs text-slate-500 dark:text-slate-400">
+            {months.map((m) => (
+              <div key={m} className="text-center">{m}</div>
+            ))}
+          </div>
+          <div className="relative mt-2 h-3 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
+            <div className="absolute inset-y-0 left-0 bg-sky-500/70" style={{ width: `${pct}%` }} />
+            <div className="absolute -top-2" style={{ left: `calc(${pct}% - 10px)` }}>
+              <div className="h-5 w-5 rounded-full bg-sky-600 ring-4 ring-white dark:ring-slate-950" title={`Progress reference: ${pct}%`} />
+            </div>
+          </div>
+          <ul className="mt-4 grid md:grid-cols-3 gap-3">
+            {MILESTONES.map((m) => (
+              <li key={m.what} className="rounded-xl border border-slate-200 dark:border-slate-800 p-3 bg-white/60 dark:bg-slate-900/60">
+                <div className="text-slate-500 dark:text-slate-400 text-xs">{m.when}</div>
+                <div className="text-slate-900 dark:text-slate-100 font-medium">{m.what}</div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function PhaseCard({ phase }: { phase: (typeof PHASES)[number] }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <article className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm overflow-hidden">
+      <div className="p-5">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h3 className="text-lg md:text-xl font-semibold text-slate-900 dark:text-white">{phase.title}</h3>
+            <div className="mt-1 text-sm text-slate-600 dark:text-slate-300">{phase.window}</div>
+            <p className="mt-3 text-slate-700 dark:text-slate-300">{phase.goal}</p>
+          </div>
+          <button
+            className="shrink-0 inline-flex items-center rounded-xl border border-slate-300 dark:border-slate-700 px-3 py-1 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800"
+            onClick={() => setOpen((v) => !v)}
+            aria-expanded={open}
+          >
+            {open ? "Hide details" : "Show details"}
+          </button>
+        </div>
+        {open && (
+          <div className="mt-5 grid md:grid-cols-2 gap-6">
+            <div>
+              <h4 className="font-medium text-slate-900 dark:text-slate-100">Deliverables</h4>
+              <ul className="mt-2 space-y-2 list-disc pl-5">
+                {phase.items.map((it) => (
+                  <li key={it} className="text-slate-700 dark:text-slate-300">{it}</li>
+                ))}
+              </ul>
+            </div>
+            <div>
+              <h4 className="font-medium text-slate-900 dark:text-slate-100">Risks & Buffers</h4>
+              <ul className="mt-2 space-y-2 list-disc pl-5">
+                {phase.risk.map((it) => (
+                  <li key={it} className="text-slate-700 dark:text-slate-300">{it}</li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        )}
+      </div>
+    </article>
+  );
+}
+
+function Phases() {
+  return (
+    <section className="bg-slate-50 dark:bg-slate-950/50">
+      <div className="max-w-6xl mx-auto px-4 py-10 md:py-14">
+        <h2 className="text-xl md:text-2xl font-semibold text-slate-900 dark:text-white">Phased Plan (with built-in leeway)</h2>
+        <p className="mt-2 text-slate-600 dark:text-slate-300 max-w-3xl">
+          Each phase includes a 15–25% buffer for unknowns. Ship the smallest usable slice first, then iterate.
+        </p>
+        <div className="mt-6 grid gap-5 md:grid-cols-2">
+          {PHASES.map((p) => (
+            <PhaseCard key={p.id} phase={p} />
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function TechStack() {
+  return (
+    <section className="bg-white dark:bg-slate-950">
+      <div className="max-w-6xl mx-auto px-4 py-10 md:py-14">
+        <h2 className="text-xl md:text-2xl font-semibold text-slate-900 dark:text-white">Lean AWS Tech Stack</h2>
+        <div className="mt-6 grid gap-4 md:grid-cols-2">
+          {TECH.map((t) => (
+            <div key={t.k} className="rounded-xl border border-slate-200 dark:border-slate-800 p-4 bg-white/60 dark:bg-slate-900/60">
+              <div className="text-slate-500 dark:text-slate-400 text-xs">{t.k}</div>
+              <div className="text-slate-900 dark:text-slate-100 font-medium">{t.v}</div>
+            </div>
+          ))}
+        </div>
+        <div className="mt-6 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 bg-slate-50 dark:bg-slate-900/60">
+          <h3 className="font-medium text-slate-900 dark:text-slate-100">Security Defaults</h3>
+          <ul className="mt-2 grid md:grid-cols-2 gap-2 list-disc pl-5 text-slate-700 dark:text-slate-300">
+            <li>Private subnets for ECS/RDS, Internet only via ALB/CloudFront</li>
+            <li>KMS everywhere (S3, RDS, EBS, Secrets); TLS 1.2+</li>
+            <li>WAF managed rules + Shield; CloudTrail and GuardDuty on</li>
+            <li>VPC endpoints for S3/CloudWatch/Secrets; no public S3 ACLs</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function CTA() {
+  return (
+    <section className="bg-gradient-to-br from-slate-900 to-slate-800 text-white">
+      <div className="max-w-6xl mx-auto px-4 py-12 md:py-16">
+        <div className="grid md:grid-cols-3 gap-6 items-center">
+          <div className="md:col-span-2">
+            <h2 className="text-2xl md:text-3xl font-semibold">Next Steps</h2>
+            <ol className="mt-4 list-decimal pl-5 space-y-2 text-slate-200">
+              <li>Create AWS sandbox account + Terraform state bucket</li>
+              <li>Deploy Phase 0 Terraform stack (VPC, ECS, RDS, Cognito)</li>
+              <li>Push API skeleton to ECS; validate auth & DB connectivity</li>
+              <li>Stand up Next.js console on CloudFront; wire Cognito login</li>
+            </ol>
+          </div>
+          <div className="rounded-2xl bg-white/10 p-5">
+            <div className="text-sm text-slate-200">Delivery Rhythm</div>
+            <div className="mt-1 text-3xl font-semibold">Bi-weekly demos</div>
+            <p className="mt-2 text-slate-300 text-sm">Show small wins, capture feedback, and keep scope realistic.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function Footer() {
+  return (
+    <footer className="bg-white dark:bg-slate-950 border-t border-slate-200 dark:border-slate-800">
+      <div className="max-w-6xl mx-auto px-4 py-8 text-sm text-slate-600 dark:text-slate-400">
+        Built for Magen — OTC Index Derivatives | This page is a static roadmap; no client data.
+      </div>
+    </footer>
+  );
+}
+
+export default function RoadmapSite() {
+  const [dark, setDark] = useState(true);
+
+  return (
+    <div className={classNames("min-h-screen", dark ? "dark bg-slate-950" : "bg-slate-50") }>
+      <div className="fixed top-4 right-4 z-50">
+        <button
+          onClick={() => setDark((d) => !d)}
+          className="rounded-xl border border-slate-300 dark:border-slate-700 bg-white/70 dark:bg-slate-900/70 backdrop-blur px-3 py-1.5 text-sm text-slate-700 dark:text-slate-200 hover:bg-white dark:hover:bg-slate-800"
+          aria-label="Toggle dark mode"
+        >
+          {dark ? "Light mode" : "Dark mode"}
+        </button>
+      </div>
+      <Header />
+      <Timeline />
+      <Phases />
+      <TechStack />
+      <CTA />
+      <Footer />
+    </div>
+  );
+}
+
